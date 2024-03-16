@@ -27,6 +27,15 @@ func main() {
 }
 
 func handleConnection(c net.Conn) {
-	c.Write([]byte("+PONG\r\n"))
-	c.Close()
+	defer c.Close()
+	for {
+		input := make([]byte, 20)
+		n, err := c.Read(input)
+		if err != nil {
+			fmt.Printf("Error %v. Exiting\n", err.Error())
+			os.Exit(1)
+		}
+		fmt.Printf("Recievied %v bytes from client\n", n)
+		c.Write([]byte("+PONG\r\n"))
+	}
 }
