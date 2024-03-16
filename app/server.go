@@ -17,13 +17,16 @@ func main() {
 	}
 	defer l.Close()
 
-	c, err := l.Accept()
-	if err != nil {
-		fmt.Println("Error accepting connection: ", err.Error())
-		os.Exit(1)
-	}
+	for {
+		c, err := l.Accept()
+		if err != nil {
+			fmt.Println("Error accepting connection: ", err.Error())
+			c.Close()
+			return
+		}
 
-	handleConnection(c)
+		go handleConnection(c)
+	}
 }
 
 func handleConnection(c net.Conn) {
@@ -33,7 +36,7 @@ func handleConnection(c net.Conn) {
 		n, err := c.Read(input)
 		if err != nil {
 			fmt.Printf("Error %v. Exiting\n", err.Error())
-			os.Exit(1)
+			return
 		}
 		fmt.Printf("Recievied %v bytes from client\n", n)
 		c.Write([]byte("+PONG\r\n"))
