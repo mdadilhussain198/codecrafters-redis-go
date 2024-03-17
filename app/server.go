@@ -13,7 +13,16 @@ import (
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
-	l, err := net.Listen("tcp", "0.0.0.0:6379")
+	args := os.Args
+	port := "6379"
+	for i, arg := range args {
+		if arg == "--port" && i+1 < len(args) {
+			port = args[i+1]
+		}
+	}
+
+	server_addr := fmt.Sprintf("0.0.0.0:%s", port)
+	l, err := net.Listen("tcp", server_addr)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
 		os.Exit(1)
