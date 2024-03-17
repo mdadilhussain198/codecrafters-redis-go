@@ -15,6 +15,7 @@ const (
 	PING = "PING"
 	SET = "SET"
 	GET = "GET"
+	PX = "PX"
 )
 
 type RESP_Parser struct {
