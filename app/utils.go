@@ -13,6 +13,8 @@ const (
 	RESP_TERM = "\r\n"
 	ECHO = "ECHO"
 	PING = "PING"
+	SET = "SET"
+	GET = "GET"
 )
 
 type RESP_Parser struct {

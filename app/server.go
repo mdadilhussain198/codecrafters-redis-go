@@ -25,34 +25,38 @@ func main() {
 			c.Close()
 			return
 		}
-
 		go handleConnection(c)
 	}
 }
 
+type ClientCommand struct {
+	command string
+	args    []string
+}
+
+type Client struct {
+	c     net.Conn
+	cache map[string]string
+}
+
 func handleConnection(c net.Conn) {
-	defer c.Close()
+	cl := Client{c: c, cache: make(map[string]string)}
+	defer cl.c.Close()
 	for {
 		input := make([]byte, 1024)
-		input_size, err := c.Read(input)
+		input_size, err := cl.c.Read(input)
 		if err != nil {
 			fmt.Printf("Error %v. Exiting\n", err.Error())
 			return
 		}
 		fmt.Printf("Recievied %v bytes from client\n", input_size)
-		fmt.Printf("Length of input from client: %v\n", len(string(input)))
 		cl_cmd := parseInput(string(input))
-		execute(cl_cmd, c)
+		cl.execute(cl_cmd)
 	}
 }
 
-type clientCommand struct {
-	command string
-	args    []string
-}
-
-func parseInput(command_str string) clientCommand {
-	var cl_cmd clientCommand
+func parseInput(command_str string) ClientCommand {
+	var cl_cmd ClientCommand
 	parser := Parser(command_str)
 	data, err := parser.getNext()
 	if err != nil || data.dataType != RESP_ARRAY {
@@ -80,23 +84,60 @@ func parseInput(command_str string) clientCommand {
 			cl_cmd.command = strings.ToUpper(data.value)
 		} else {
 			cl_cmd.args = append(cl_cmd.args, data.value)
-			fmt.Println(cl_cmd.args)
 		}
 	}
 	return cl_cmd
 }
 
-func execute(cl_cmd clientCommand, c net.Conn) {
+func (cl *Client) execute(cl_cmd ClientCommand) {
 	switch cl_cmd.command {
 	case ECHO:
-		c.Write(make_Output(cl_cmd.args[0]))
+		if len(cl_cmd.args) < 1 {
+			cl.c.Write(makeBulk("Invalid input"))
+			break
+		}
+		cl.c.Write(makeBulk(cl_cmd.args[0]))
 	case PING:
-		c.Write(make_Output("PONG"))
+		cl.c.Write(makeBulk("PONG"))
+	case SET:
+		if len(cl_cmd.args) < 2 {
+			cl.c.Write(makeBulk("Invalid input"))
+			break
+		}
+		cl.handleSet(cl_cmd.args[0], cl_cmd.args[1])
+	case GET:
+		if len(cl_cmd.args) < 1 {
+			cl.c.Write(makeBulk("Invalid input"))
+			break
+		}
+		cl.handleGet(cl_cmd.args[0])
 	default:
-		c.Write(make_Output("Invalid input"))
+		cl.c.Write(makeBulk("Invalid input"))
 	}
 }
 
-func make_Output(str string) []byte {
+func (cl *Client) handleSet(key string, val string) {
+	cl.cache[key] = val
+	cl.c.Write(makeSimple("OK"))
+}
+
+func (cl *Client) handleGet(key string) {
+	val, present := cl.cache[key]
+	if present {
+		cl.c.Write(makeBulk(val))
+	} else {
+		cl.c.Write(makeBulkNull())
+	}
+}
+
+func makeBulk(str string) []byte {
 	return []byte(fmt.Sprintf("$%d\r\n%s\r\n", len(str), str))
+}
+
+func makeBulkNull() []byte {
+	return []byte("$-1\r\n")
+}
+
+func makeSimple(str string) []byte {
+	return []byte(fmt.Sprintf("+%s\r\n", str))
 }
