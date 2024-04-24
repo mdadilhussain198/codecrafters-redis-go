@@ -117,9 +117,19 @@ func (cl *Client) execute(cl_cmd ClientCommand) {
 		cl.handleSet(cl_cmd.args)
 	case GET:
 		cl.handleGet(cl_cmd.args)
+	case INFO:
+		cl.handleInfo(cl_cmd.args)
 	default:
 		cl.c.Write(makeBulk("Invalid input"))
 	}
+}
+
+func (cl *Client) handleInfo(args []string) {
+	if len(args) != 1 || args[0] != "replication" {
+		cl.c.Write(makeBulk("Invalid input\n"))
+		return
+	}
+	cl.c.Write(makeBulk("role:master\n"))
 }
 
 func (cl *Client) handleSet(args []string) {

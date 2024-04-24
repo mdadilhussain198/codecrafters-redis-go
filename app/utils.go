@@ -16,6 +16,7 @@ const (
 	SET = "SET"
 	GET = "GET"
 	PX = "PX"
+	INFO = "INFO"
 )
 
 type RESP_Parser struct {
