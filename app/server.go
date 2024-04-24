@@ -10,16 +10,34 @@ import (
 	"time"
 )
 
+type Server struct {
+	hostname string
+	port     string
+	master   *Server
+}
+
+var server = Server{
+	hostname: "localhost",
+	port:     "",
+}
+
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
 	args := os.Args
 	port := "6379"
+	var master *Server = nil
 	for i, arg := range args {
 		if arg == "--port" && i+1 < len(args) {
 			port = args[i+1]
+		} else if arg == "--replicaof" && i+2 < len(args) {
+			masterHost, masterPort := args[i+1], args[i+2]
+			master = &Server{masterHost, masterPort, nil}
 		}
 	}
+
+	server.port = port
+	server.master = master
 
 	server_addr := fmt.Sprintf("0.0.0.0:%s", port)
 	l, err := net.Listen("tcp", server_addr)
@@ -129,7 +147,11 @@ func (cl *Client) handleInfo(args []string) {
 		cl.c.Write(makeBulk("Invalid input\n"))
 		return
 	}
-	cl.c.Write(makeBulk("role:master\n"))
+	if server.master == nil {
+		cl.c.Write(makeBulk("role:master\n"))
+	} else {
+		cl.c.Write(makeBulk("role:slave\n"))
+	}
 }
 
 func (cl *Client) handleSet(args []string) {
