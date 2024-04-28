@@ -13,6 +13,8 @@ import (
 type Server struct {
 	hostname string
 	port     string
+	MASTER_REPLID string
+	MASTER_REPL_OFFSET int
 	master   *Server
 }
 
@@ -32,12 +34,16 @@ func main() {
 			port = args[i+1]
 		} else if arg == "--replicaof" && i+2 < len(args) {
 			masterHost, masterPort := args[i+1], args[i+2]
-			master = &Server{masterHost, masterPort, nil}
+			master = &Server{masterHost, masterPort, "", 0, nil}
 		}
 	}
 
 	server.port = port
 	server.master = master
+	if (server.master == nil) {
+		server.MASTER_REPLID = getRandomStr(40)
+		server.MASTER_REPL_OFFSET = 0
+	}
 
 	server_addr := fmt.Sprintf("0.0.0.0:%s", port)
 	l, err := net.Listen("tcp", server_addr)
@@ -148,9 +154,12 @@ func (cl *Client) handleInfo(args []string) {
 		return
 	}
 	if server.master == nil {
-		cl.c.Write(makeBulk("role:master\n"))
+		response := fmt.Sprintf("%s:master\n", ROLE)
+		response = response + fmt.Sprintf("%s:%s\n", MASTER_REPLID, server.MASTER_REPLID)
+		response = response + fmt.Sprintf("%s:%d\n", MASTER_REPL_OFFSET, server.MASTER_REPL_OFFSET)
+		cl.c.Write(makeBulk(response))
 	} else {
-		cl.c.Write(makeBulk("role:slave\n"))
+		cl.c.Write(makeBulk(fmt.Sprintf("%s:slave\n", ROLE)))
 	}
 }
 
