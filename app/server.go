@@ -11,41 +11,54 @@ import (
 )
 
 type Server struct {
-	hostname string
-	port     string
-	MASTER_REPLID string
+	hostname           string
+	port               string
+	MASTER_REPLID      string
 	MASTER_REPL_OFFSET int
-	master   *Server
+	master             *Server
+}
+
+type ClientCommand struct {
+	command string
+	args    []string
+}
+
+type CacheValue struct {
+	death int64
+	val   string
+}
+
+type Client struct {
+	c     net.Conn
+	cache map[string]CacheValue
 }
 
 var server = Server{
 	hostname: "localhost",
-	port:     "",
+	port:     "6379",
 }
 
 func main() {
 	fmt.Println("Logs from your program will appear here!")
 
 	args := os.Args
-	port := "6379"
-	var master *Server = nil
 	for i, arg := range args {
 		if arg == "--port" && i+1 < len(args) {
-			port = args[i+1]
+			server.port = args[i+1]
 		} else if arg == "--replicaof" && i+2 < len(args) {
 			masterHost, masterPort := args[i+1], args[i+2]
-			master = &Server{masterHost, masterPort, "", 0, nil}
+			server.master = &Server{masterHost, masterPort, "", 0, nil}
 		}
 	}
 
-	server.port = port
-	server.master = master
-	if (server.master == nil) {
+	if server.master == nil {
 		server.MASTER_REPLID = getRandomStr(40)
 		server.MASTER_REPL_OFFSET = 0
+	} else {
+		pingMaster(&server)
 	}
 
-	server_addr := fmt.Sprintf("0.0.0.0:%s", port)
+	server_addr := fmt.Sprintf("0.0.0.0:%s", server.port)
 	l, err := net.Listen("tcp", server_addr)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -64,19 +77,19 @@ func main() {
 	}
 }
 
-type ClientCommand struct {
-	command string
-	args    []string
-}
-
-type CacheValue struct {
-	death int64
-	val   string
-}
-
-type Client struct {
-	c     net.Conn
-	cache map[string]CacheValue
+func pingMaster(server *Server) {
+	masterUrl := server.master.hostname + ":" + server.master.port
+	conn, err := net.Dial("tcp", masterUrl)
+	if err != nil {
+		fmt.Printf("Error %v. Exiting\n", err.Error())
+		return
+	}
+	defer conn.Close()
+	_, err = conn.Write(makeArray([]string{"PING"}))
+	if err != nil {
+		fmt.Printf("Error %v. Exiting\n", err.Error())
+		return
+	}
 }
 
 func handleConnection(c net.Conn) {
@@ -200,6 +213,14 @@ func (cl *Client) handleGet(args []string) {
 	} else {
 		cl.c.Write(makeBulkNull())
 	}
+}
+
+func makeArray(strs []string) []byte {
+	result := fmt.Sprintf("*%d\r\n", len(strs))
+	for _, str := range strs {
+		result = result + fmt.Sprintf("$%d\r\n%s\r\n", len(str), str)
+	}
+	return []byte(result)
 }
 
 func makeBulk(str string) []byte {
