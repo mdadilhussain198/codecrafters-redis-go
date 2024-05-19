@@ -45,8 +45,9 @@ func main() {
 	for i, arg := range args {
 		if arg == "--port" && i+1 < len(args) {
 			server.port = args[i+1]
-		} else if arg == "--replicaof" && i+2 < len(args) {
-			masterHost, masterPort := args[i+1], args[i+2]
+		} else if arg == "--replicaof" && i+1 < len(args) {
+			master_addr := strings.Fields(args[i+1])
+			masterHost, masterPort := master_addr[0], master_addr[1]
 			server.master = &Server{masterHost, masterPort, "", 0, nil}
 		}
 	}
@@ -55,10 +56,10 @@ func main() {
 		server.MASTER_REPLID = getRandomStr(40)
 		server.MASTER_REPL_OFFSET = 0
 	} else {
-		pingMaster(&server)
+		server.sendHandshake()
 	}
 
-	server_addr := fmt.Sprintf("0.0.0.0:%s", server.port)
+	server_addr := fmt.Sprintf("localhost:%s", server.port)
 	l, err := net.Listen("tcp", server_addr)
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -77,7 +78,7 @@ func main() {
 	}
 }
 
-func pingMaster(server *Server) {
+func (server *Server) sendHandshake() {
 	masterUrl := server.master.hostname + ":" + server.master.port
 	conn, err := net.Dial("tcp", masterUrl)
 	if err != nil {
@@ -90,6 +91,19 @@ func pingMaster(server *Server) {
 		fmt.Printf("Error %v. Exiting\n", err.Error())
 		return
 	}
+	time.Sleep(1*time.Second)
+	_, err = conn.Write(makeArray([]string{"REPLCONF", "listening-port", server.port}))
+	if err != nil {
+		fmt.Printf("Error %v. Exiting\n", err.Error())
+		return
+	}
+	time.Sleep(1*time.Second)
+	_, err = conn.Write(makeArray([]string{"REPLCONF", "capa", "psync2"}))
+	if err != nil {
+		fmt.Printf("Error %v. Exiting\n", err.Error())
+		return
+	}
+	time.Sleep(1*time.Second)
 }
 
 func handleConnection(c net.Conn) {
@@ -156,6 +170,8 @@ func (cl *Client) execute(cl_cmd ClientCommand) {
 		cl.handleGet(cl_cmd.args)
 	case INFO:
 		cl.handleInfo(cl_cmd.args)
+	case REPLCONF:
+		cl.handleReplConf(cl_cmd.args)
 	default:
 		cl.c.Write(makeBulk("Invalid input"))
 	}
@@ -174,6 +190,14 @@ func (cl *Client) handleInfo(args []string) {
 	} else {
 		cl.c.Write(makeBulk(fmt.Sprintf("%s:slave\n", ROLE)))
 	}
+}
+
+func (cl *Client) handleReplConf(args []string) {
+	if len(args) < 2 {
+		cl.c.Write(makeBulk("Invalid input"))
+		return
+	}
+	cl.c.Write(makeSimple("OK"))
 }
 
 func (cl *Client) handleSet(args []string) {

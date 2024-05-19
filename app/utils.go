@@ -18,6 +18,7 @@ const (
 	GET         = "GET"
 	PX          = "PX"
 	INFO        = "INFO"
+	REPLCONF    = "REPLCONF"
 
 	//Keys for output of INFO
 	ROLE               = "role"
